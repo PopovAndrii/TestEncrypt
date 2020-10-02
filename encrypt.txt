@@ -1,0 +1,4 @@
+If you are using rb mode, won't need to port your code,
+ and expect to read a lot of the file and/or don't care
+ about network performance, memory mapped 
+Win32 files might also be an option.
