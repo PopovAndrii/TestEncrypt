@@ -22,6 +22,10 @@ void ReadFile(const std::string& filePath, std::vector<unsigned char>& buf)
 
     buf.clear();
     buf.insert(buf.begin(), std::istreambuf_iterator<unsigned char>(fileStream), std::istreambuf_iterator<unsigned char>());
+    
+    if (!buf.size()) {
+        throw std::runtime_error("Empty file [" + filePath + "]");
+    }
 
     fileStream.close();
 }
@@ -95,6 +99,8 @@ void DecryptAes(const std::vector<unsigned char> plainText, std::vector<unsigned
         throw std::runtime_error("DecryptInit error");
     }
 
+    //EVP_CIPHER_CTX_set_padding(ctx, 0); // fix del
+
     std::vector<unsigned char> chipherTextBuf(plainText.size() + AES_BLOCK_SIZE);
     int chipherTextSize = 0;
     if (!EVP_DecryptUpdate(ctx, &chipherTextBuf[0], &chipherTextSize, &plainText[0], plainText.size())) {
@@ -107,11 +113,12 @@ void DecryptAes(const std::vector<unsigned char> plainText, std::vector<unsigned
         EVP_CIPHER_CTX_free(ctx);
         throw std::runtime_error("DecryptFinal error");
     }
+
     chipherTextSize += lastPartLen;
     chipherTextBuf.erase(chipherTextBuf.begin() + chipherTextSize, chipherTextBuf.end());
 
     chipherText.swap(chipherTextBuf);
-
+    
     EVP_CIPHER_CTX_free(ctx);
 }
 
@@ -127,20 +134,40 @@ void CalculateHash(const std::vector<unsigned char>& data, std::vector<unsigned 
     hash.swap(hashTmp);
 }
 
-void Decrypt() {
+void CatTextAndHash(std::vector<unsigned char>& data, std::vector<unsigned char>& hash)
+{
+    int dizeData = size(data);
+
+    if (dizeData < SHA256_DIGEST_LENGTH) {
+        throw std::runtime_error("Corrupted file data");
+    }
+
+    int is = dizeData - SHA256_DIGEST_LENGTH;
+    for (int i = 0;is != dizeData; ++is, ++i) {
+        hash.push_back(data[is]);
+    }
+    
+    data.resize(dizeData - SHA256_DIGEST_LENGTH);
+}
+
+void Decrypt()
+{
+    std::vector<unsigned char> chipherText1;
+    ReadFile("chipher_text", chipherText1);
+
+    std::vector<unsigned char> hash1;
+    CatTextAndHash(chipherText1, hash1);
 
     std::vector<unsigned char> plainText;
-    ReadFile("chipher_text", plainText);
+    DecryptAes(chipherText1, plainText);
 
-    std::vector<unsigned char> hash;
-    CalculateHash(plainText, hash);
+    std::vector<unsigned char> hash2;
+    CalculateHash(plainText, hash2);
 
-    std::vector<unsigned char> chipherText;
-    DecryptAes(plainText, chipherText);
-
-    WriteFile("plain_text", chipherText);
-
-    AppendToFile("plain_text", hash);
+    if (hash1 == hash2) {
+        std::cout << "Check summ is correct. Write" << std::endl;
+        WriteFile("final_text", plainText);
+    }
 }
 
 void Encrypt()
