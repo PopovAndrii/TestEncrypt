@@ -1,151 +1,34 @@
 #include <string>
 #include <vector>
-#include <fstream>
+//#include <fstream>
 #include <exception>
 #include <iostream>
 #include <future>
-//#include <mutex>
-//#include <Windows.h>
-
-#include "openssl/evp.h"
-#include "openssl/aes.h"
-#include "openssl/sha.h"
 
 #include "File.h"
+#include "Crypt.h"
+//#include "Crack.h"
 
-unsigned char key[EVP_MAX_KEY_LENGTH];
-unsigned char iv[EVP_MAX_IV_LENGTH];
-
-void PasswordToKey(std::string& password)
+void bufFileData(std::vector<unsigned char>& chipherText, std::vector<unsigned char>& hash1, File& file, Crypt& crypt)
 {
-	const EVP_MD* dgst = EVP_get_digestbyname("md5");
-	if (!dgst)
-	{
-		std::cout << "dgst\n"; // fix
-		//throw std::runtime_error("no such digest");
-	}
+	file.ReadFile("./text/chipher_text_brute_force", chipherText);
 
-	const unsigned char* salt = NULL;
-	if (!EVP_BytesToKey(EVP_aes_128_cbc(), EVP_md5(), salt,
-		reinterpret_cast<unsigned char*>(&password[0]),
-		password.size(), 1, key, iv))
-	{
-		//throw std::runtime_error("EVP_BytesToKey failed");
-	}
+	crypt.CatTextAndHash(chipherText, hash1);
 }
 
-void EncryptAes(const std::vector<unsigned char> plainText, std::vector<unsigned char>& chipherText)
+bool Decrypt(std::vector<unsigned char>& chipherText1, std::vector<unsigned char>& hash1, File& file, Crypt& crypt)
 {
-	EVP_CIPHER_CTX* ctx = EVP_CIPHER_CTX_new();
-	if (!EVP_EncryptInit_ex(ctx, EVP_aes_128_cbc(), NULL, key, iv))
-	{
-		throw std::runtime_error("EncryptInit error");
-	}
-
-	std::vector<unsigned char> chipherTextBuf(plainText.size() + AES_BLOCK_SIZE);
-	int chipherTextSize = 0;
-	if (!EVP_EncryptUpdate(ctx, &chipherTextBuf[0], &chipherTextSize, &plainText[0], plainText.size())) {
-		EVP_CIPHER_CTX_free(ctx);
-		throw std::runtime_error("Encrypt error");
-	}
-
-	int lastPartLen = 0;
-	if (!EVP_EncryptFinal_ex(ctx, &chipherTextBuf[0] + chipherTextSize, &lastPartLen)) {
-		EVP_CIPHER_CTX_free(ctx);
-		throw std::runtime_error("EncryptFinal error");
-	}
-	chipherTextSize += lastPartLen;
-	chipherTextBuf.erase(chipherTextBuf.begin() + chipherTextSize, chipherTextBuf.end());
-
-	chipherText.swap(chipherTextBuf);
-
-	EVP_CIPHER_CTX_free(ctx);
-}
-
-bool DecryptAes(const std::vector<unsigned char> plainText, std::vector<unsigned char>& chipherText)
-{
-	EVP_CIPHER_CTX* ctx = EVP_CIPHER_CTX_new();
-	if (!EVP_DecryptInit_ex(ctx, EVP_aes_128_cbc(), NULL, key, iv))
-	{
-		//throw std::runtime_error("DecryptInit error");
-	}
-
-	std::vector<unsigned char> chipherTextBuf(plainText.size() + AES_BLOCK_SIZE);
-	int chipherTextSize = 0;
-	if (!EVP_DecryptUpdate(ctx, &chipherTextBuf[0], &chipherTextSize, &plainText[0], plainText.size())) {
-		EVP_CIPHER_CTX_free(ctx);
-		//throw std::runtime_error("Decrypt error");
-	}
-
-	int lastPartLen = 0;
-	if (!EVP_DecryptFinal_ex(ctx, &chipherTextBuf[0] + chipherTextSize, &lastPartLen)) {
-		EVP_CIPHER_CTX_free(ctx);
-		return false;
-		//throw std::runtime_error("DecryptFinal error");
-	}
-
-	chipherTextSize += lastPartLen;
-	chipherTextBuf.erase(chipherTextBuf.begin() + chipherTextSize, chipherTextBuf.end());
-
-	chipherText.swap(chipherTextBuf);
-
-	EVP_CIPHER_CTX_free(ctx);
-
-	return true;
-}
-
-void CalculateHash(const std::vector<unsigned char>& data, std::vector<unsigned char>& hash)
-{
-	std::vector<unsigned char> hashTmp(SHA256_DIGEST_LENGTH);
-
-	SHA256_CTX sha256;
-	SHA256_Init(&sha256);
-	SHA256_Update(&sha256, &data[0], data.size());
-	SHA256_Final(&hashTmp[0], &sha256);
-
-	hash.swap(hashTmp);
-}
-
-void CatTextAndHash(std::vector<unsigned char>& data, std::vector<unsigned char>& hash)
-{
-	int sizeData = size(data);
-
-	if (sizeData < SHA256_DIGEST_LENGTH) {
-		//throw std::runtime_error("Corrupted file data");
-	}
-
-	int is = sizeData - SHA256_DIGEST_LENGTH;
-	for (int i = 0; is != sizeData; ++is, ++i) {
-		hash.push_back(data[is]);
-	}
-
-	data.resize(sizeData - SHA256_DIGEST_LENGTH);
-}
-
-void bufFileData(std::vector<unsigned char>& chipherText, std::vector<unsigned char>& hash1)
-{
-	std::unique_ptr<File> file(new File);
-
-	file->ReadFile("./text/chipher_text_brute_force", chipherText);
-
-	CatTextAndHash(chipherText, hash1);
-}
-
-bool Decrypt(std::vector<unsigned char>& chipherText1, std::vector<unsigned char>& hash1)
-{
-	std::unique_ptr<File> file(new File);
-
 	std::vector<unsigned char> plainText;
-	if (!DecryptAes(chipherText1, plainText)) {
+	if (!crypt.DecryptAes(chipherText1, plainText)) {
 		return false;
 	}
 
 	std::vector<unsigned char> hash2;
-	CalculateHash(plainText, hash2);
+	crypt.CalculateHash(plainText, hash2);
 
 	if (hash1 == hash2) {
 		std::cout << "\n Check summ is correct. Write..." << std::endl;
-		file->WriteFile("./text/final_text", plainText);
+		file.WriteFile("./text/final_text", plainText);
 	}
 	else {
 		return false;
@@ -154,31 +37,34 @@ bool Decrypt(std::vector<unsigned char>& chipherText1, std::vector<unsigned char
 	return true;
 }
 
-void Encrypt()
+void Encrypt(File& file, Crypt& crypt)
 {
-	std::unique_ptr<File> file(new File);
-
 	std::vector<unsigned char> plainText;
-	file->ReadFile("./text/plain_text", plainText);
+	file.ReadFile("./text/plain_text", plainText);
 
 	std::vector<unsigned char> hash;
-	CalculateHash(plainText, hash);
+	crypt.CalculateHash(plainText, hash);
 
 	std::vector<unsigned char> chipherText;
-	EncryptAes(plainText, chipherText);
+	crypt.EncryptAes(plainText, chipherText);
 
-	file->WriteFile("./text/chipher_text1", chipherText);
+	file.WriteFile("./text/chipher_text1", chipherText);
 
-	file->AppendToFile("./text/chipher_text1", hash);
+	file.AppendToFile("./text/chipher_text1", hash);
 }
 
-std::string PasswdLoop(std::vector<std::string> passwd, std::vector<unsigned char> chipherText, std::vector<unsigned char> hash)
+std::string PasswdLoop(
+	std::vector<std::string> passwd, 
+	std::vector<unsigned char> chipherText,
+	std::vector<unsigned char> hash,
+	File file,
+	Crypt crypt)
 {
 	for (auto it = passwd.begin(); it != passwd.end(); ++it)
 	{
-		PasswordToKey(*it);
+		crypt.PasswordToKey(*it);
 
-		if (Decrypt(chipherText, hash))
+		if (Decrypt(chipherText, hash, file, crypt))
 		{
 			return *it;
 		}
@@ -186,11 +72,11 @@ std::string PasswdLoop(std::vector<std::string> passwd, std::vector<unsigned cha
 	return "";
 }
 
-bool Crack(std::vector<char> Chars)
+bool Crack(std::vector<char> Chars, File& file, Crypt& crypt)
 {
 	std::vector<unsigned char> chipherText;
 	std::vector<unsigned char> hash1;
-	bufFileData(chipherText, hash1);
+	bufFileData(chipherText, hash1, file, crypt);
 
 	std::vector<std::future <std::string>> tread;
 	std::vector<std::string> pass;
@@ -219,7 +105,7 @@ bool Crack(std::vector<char> Chars)
 			int vectorSize = 5000;
 			if (pass.size() == vectorSize)
 			{
-				tread.emplace_back(std::async(PasswdLoop, pass, chipherText, hash1));
+				tread.emplace_back(std::async(PasswdLoop, pass, chipherText, hash1, file, crypt));
 
 				int numberTreds = 16;
 				if (tread.size() == numberTreds)
@@ -265,22 +151,19 @@ void GenereteRangeChars(std::vector<char>& Chars) {
 
 int main()
 {
-	OpenSSL_add_all_digests();
+	std::unique_ptr<Crypt> crypt(new Crypt);
+
+	std::unique_ptr<File> file(new File);
 
 	//std::string pass = "3"; // [k5fq]
 	try
 	{
 		//PasswordToKey(pass);
-		//Encrypt();
+		//Encrypt(*file, *crypt);
 
-		//std::vector<char> Chars = { '5','f','k','q','r','s','t','u','v','w','x','y','z', };
 		std::vector<char> Chars = { '0','1','2','3','4','5','6','7','8','9','a','b','c','d','e','f','g','h','i','j','k','l','m','n','o','p','q','r','s','t','u','v','w','x','y','z', };
 
-		Crack(Chars);
-
-		//std::unique_ptr<File> file(new File);
-		//file->WriteFile("./text/passwdChecked.txt", passwdChecked); // append to file!
-
+		Crack(Chars, *file, *crypt);
 
 	}
 	catch (const std::runtime_error& ex)

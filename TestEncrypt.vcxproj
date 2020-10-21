@@ -151,10 +151,14 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
+    <ClCompile Include="Crack.cpp" />
+    <ClCompile Include="Crypt.cpp" />
     <ClCompile Include="File.cpp" />
     <ClCompile Include="main.cpp" />
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="Crack.h" />
+    <ClInclude Include="Crypt.h" />
     <ClInclude Include="File.h" />
     <ClInclude Include="resource.h" />
   </ItemGroup>
