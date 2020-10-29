@@ -11,7 +11,8 @@ void File::ReadFile(const std::string& filePath, std::vector<unsigned char>& buf
     buf.clear();
     buf.insert(buf.begin(), std::istreambuf_iterator<unsigned char>(fileStream), std::istreambuf_iterator<unsigned char>());
 
-    if (!buf.size()) {
+    if (!buf.size())
+    {
         throw std::runtime_error("Empty file [" + filePath + "]");
     }
 
@@ -29,5 +30,21 @@ void File::AppendToFile(const std::string& filePath, const std::vector<unsigned 
 {
     std::basic_ofstream<unsigned char> fileStream(filePath, std::ios::binary | std::ios::app);
     fileStream.write(&buf[0], buf.size());
+    fileStream.close();
+}
+
+void File::WriteFileString(const std::string& filePath, const std::vector<std::string>& buf)
+{
+    std::ofstream fileStream(filePath);
+    if (!fileStream.is_open())
+    {
+        throw std::runtime_error("Can not open file " + filePath);
+    }
+
+    for (std::vector<std::string>::const_iterator it = buf.begin(); it != buf.end(); ++it)
+    {
+        fileStream << *it + "\n";
+    }
+
     fileStream.close();
 }

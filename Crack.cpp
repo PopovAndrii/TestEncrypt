@@ -4,6 +4,8 @@ Crack::Crack()
 {
 	m_file = new File;
 	m_crypt = new Crypt;
+
+	BufFileData();
 }
 
 Crack::~Crack()
@@ -11,17 +13,17 @@ Crack::~Crack()
 	delete m_file, m_crypt;
 }
 
-void Crack::BufFileData(std::vector<unsigned char>& chipherText, std::vector<unsigned char>& hash1)
+void Crack::BufFileData()
 {
-	m_file->ReadFile("./text/chipher_text_brute_force", chipherText);
+	m_file->ReadFile("./text/chipher_text_brute_force", m_chipherText);
 
-	m_crypt->CatTextAndHash(chipherText, hash1);
+	m_crypt->CatTextAndHash(m_chipherText, m_hash);
 }
 
-bool Crack::Decrypt(std::vector<unsigned char>& chipherText1, std::vector<unsigned char>& hash1)
+bool Crack::Decrypt()
 {
 	std::vector<unsigned char> plainText;
-	if (!m_crypt->DecryptAes(chipherText1, plainText))
+	if (!m_crypt->DecryptAes(m_chipherText, plainText))
 	{
 		return false;
 	}
@@ -29,8 +31,8 @@ bool Crack::Decrypt(std::vector<unsigned char>& chipherText1, std::vector<unsign
 	std::vector<unsigned char> hash2;
 	m_crypt->CalculateHash(plainText, hash2);
 
-	if (hash1 == hash2) {
-		std::cout << "\n Check summ is correct. Write..." << std::endl;
+	if (m_hash == hash2)
+	{
 		m_file->WriteFile("./text/final_text", plainText);
 	}
 	else
@@ -57,40 +59,61 @@ void Crack::Encrypt()
 	m_file->AppendToFile("./text/chipher_text1", hash);
 }
 
-std::string Crack::PasswdLoop(
-	std::vector<std::string> passwd,
-	std::vector<unsigned char> chipherText,
-	std::vector<unsigned char> hash
+bool Crack::PasswdLoop(
+	std::vector<std::string> passwd
 )
 {
 	for (auto it = passwd.begin(); it != passwd.end(); ++it)
 	{
-		if (m_exitTread)
+		if (m_threadExit)
 		{
-			std::cout << " exit\n";
-			return std::string();
+			return false;
 		}
 
 		m_crypt->PasswordToKey(*it);
 
-		if (Decrypt(chipherText, hash))
+		if (Decrypt())
 		{
-			m_exitTread = true;
-			return *it;
+			m_threadExit = true;
+			m_findingPasswd = *it;
+
+			return true;
+		}
+
+		if (m_log) {
+			{
+				std::scoped_lock ul(m_lock);
+				m_verifiPasswd.push_back(*it);
+			}
 		}
 	}
-	return std::string();
+	return false;
 }
 
-bool Crack::PasswdGenerate(std::vector<char> Chars)
+bool Crack::ThreadManager()
 {
-	std::vector<unsigned char> chipherText;
-	std::vector<unsigned char> hash1;
-	BufFileData(chipherText, hash1);
+	m_thread.emplace_back(std::async(&Crack::PasswdLoop, this, m_passwd));
 
-	std::vector<std::future <std::string>> tread;
-	std::vector<std::string> pass;
+	if (m_thread.size() == m_threadCount)
+	{
+		std::cout << ".";
 
+		for (int t = 0; t != m_threadCount; ++t)
+		{
+			if (m_thread[t].get())
+			{
+				return true;
+			}
+		}
+		m_thread.clear();
+	}
+	m_passwd.clear();
+
+	return false;
+}
+
+bool Crack::PasswdGenerate(const std::vector<char> Chars)
+{
 	int n = Chars.size();
 	int i = 0;
 
@@ -109,38 +132,39 @@ bool Crack::PasswdGenerate(std::vector<char> Chars)
 				K *= n;
 			}
 
-			pass.push_back(crack);
+			m_passwd.push_back(crack);
 
-			int vectorSize = 8000;
-			if (pass.size() == vectorSize)
+			if (m_passwd.size() == m_passwdVectorSize)
 			{
-				// tread.emplace_back(std::async(&Crack::PasswdLoop, this, pass, chipherText, hash1, std::ref(*m_file), std::ref(*m_crypt)));  :)
-				tread.emplace_back(std::async(&Crack::PasswdLoop, this, pass, chipherText, hash1));
-
-				int numberThreads = 16;
-				if (tread.size() == numberThreads)
+				if (ThreadManager())
 				{
-					std::cout << "\nThreads(" << numberThreads << ") Vector Size(" << vectorSize << "):";
-
-					for (int t = 0; t != numberThreads; ++t)
-					{
-						for (std::string s, c = "."; std::future_status::timeout == tread[t].wait_for(std::chrono::milliseconds(2)); )
-						{
-							std::cout << (c += s);
-						}
-						
-						std::string findingPasswd = tread[t].get();
-						if (!findingPasswd.empty())
-						{
-							std::cout << findingPasswd << std::endl;
-							return true;
-						}
-					}
-					tread.clear();
+					return true;
 				}
-				pass.clear();
 			}
 		}
 	}
+
 	return true;
+}
+
+void Crack::PasswdToFile()
+{
+	m_file->WriteFileString("./text/log_passwd.txt", m_verifiPasswd);
+}
+
+void Crack::InitParam(int count, int size, bool log)
+{
+	m_threadCount = count;
+	m_passwdVectorSize = size;
+	m_log = log;
+}
+
+void Crack::Stat()
+{
+	std::cout << "\nDecrypted password: " << m_findingPasswd << std::endl;
+	if (m_log)
+	{
+		std::cout << "Verified passwords: " << m_verifiPasswd.size() << std::endl;
+		PasswdToFile();
+	}
 }

@@ -10,7 +10,6 @@ void Crypt::PasswordToKey(std::string& password)
 	const EVP_MD* dgst = EVP_get_digestbyname("md5");
 	if (!dgst)
 	{
-		std::cout << "dgst\n"; // fix
 		//throw std::runtime_error("no such digest");
 	}
 
@@ -33,13 +32,15 @@ void Crypt::EncryptAes(const std::vector<unsigned char> plainText, std::vector<u
 
 	std::vector<unsigned char> chipherTextBuf(plainText.size() + AES_BLOCK_SIZE);
 	int chipherTextSize = 0;
-	if (!EVP_EncryptUpdate(ctx, &chipherTextBuf[0], &chipherTextSize, &plainText[0], plainText.size())) {
+	if (!EVP_EncryptUpdate(ctx, &chipherTextBuf[0], &chipherTextSize, &plainText[0], plainText.size()))
+	{
 		EVP_CIPHER_CTX_free(ctx);
 		throw std::runtime_error("Encrypt error");
 	}
 
 	int lastPartLen = 0;
-	if (!EVP_EncryptFinal_ex(ctx, &chipherTextBuf[0] + chipherTextSize, &lastPartLen)) {
+	if (!EVP_EncryptFinal_ex(ctx, &chipherTextBuf[0] + chipherTextSize, &lastPartLen))
+	{
 		EVP_CIPHER_CTX_free(ctx);
 		throw std::runtime_error("EncryptFinal error");
 	}
@@ -61,13 +62,15 @@ bool Crypt::DecryptAes(const std::vector<unsigned char> plainText, std::vector<u
 
 	std::vector<unsigned char> chipherTextBuf(plainText.size() + AES_BLOCK_SIZE);
 	int chipherTextSize = 0;
-	if (!EVP_DecryptUpdate(ctx, &chipherTextBuf[0], &chipherTextSize, &plainText[0], plainText.size())) {
+	if (!EVP_DecryptUpdate(ctx, &chipherTextBuf[0], &chipherTextSize, &plainText[0], plainText.size()))
+	{
 		EVP_CIPHER_CTX_free(ctx);
 		//throw std::runtime_error("Decrypt error");
 	}
 
 	int lastPartLen = 0;
-	if (!EVP_DecryptFinal_ex(ctx, &chipherTextBuf[0] + chipherTextSize, &lastPartLen)) {
+	if (!EVP_DecryptFinal_ex(ctx, &chipherTextBuf[0] + chipherTextSize, &lastPartLen))
+	{
 		EVP_CIPHER_CTX_free(ctx);
 		return false;
 		//throw std::runtime_error("DecryptFinal error");

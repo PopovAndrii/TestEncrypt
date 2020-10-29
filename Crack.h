@@ -2,6 +2,8 @@
 
 #include <vector>
 #include <future>
+//#include <atomic>
+#include <mutex>
 
 #include "File.h"
 #include "Crypt.h"
@@ -15,23 +17,38 @@ public:
 
 	void Encrypt();
 	
-	std::string PasswdLoop(
-		std::vector<std::string> passwd,
-		std::vector<unsigned char> chipherText,
-		std::vector<unsigned char> hash
-	);
+	bool ThreadManager();
+	bool PasswdLoop(std::vector<std::string> passwd);
 
-	bool PasswdGenerate(std::vector<char> Chars);
+	bool PasswdGenerate(const std::vector<char> Chars);
+	void PasswdToFile();
 
+	void InitParam(const int count, const int size, bool log);
+	void Stat();
 
 private:
 
-	void BufFileData(std::vector<unsigned char>& chipherText, std::vector<unsigned char>& hash1);
-	bool Decrypt(std::vector<unsigned char>& chipherText1, std::vector<unsigned char>& hash1);
+	void BufFileData();
+	bool Decrypt();
 
 	File* m_file;
 	Crypt* m_crypt;
 
-	bool m_exitTread = false;
+	std::vector<unsigned char> m_chipherText;
+	std::vector<unsigned char> m_hash;
+
+	std::mutex m_lock;
+
+	int m_threadCount;
+	int m_passwdVectorSize;
+	bool m_log;
+
+	std::vector<std::future <bool>> m_thread;
+	bool m_threadExit = false;
+	std::vector<std::string> m_passwd;
+
+	std::vector<std::string> m_verifiPasswd;
+	std::string m_findingPasswd;
+
 };
 
