@@ -10,7 +10,7 @@ void Crypt::PasswordToKey(std::string& password)
 	const EVP_MD* dgst = EVP_get_digestbyname("md5");
 	if (!dgst)
 	{
-		//throw std::runtime_error("no such digest");
+		throw std::runtime_error("no such digest");
 	}
 
 	const unsigned char* salt = NULL;
@@ -18,11 +18,11 @@ void Crypt::PasswordToKey(std::string& password)
 		reinterpret_cast<unsigned char*>(&password[0]),
 		password.size(), 1, m_key, m_iv))
 	{
-		//throw std::runtime_error("EVP_BytesToKey failed");
+		throw std::runtime_error("EVP_BytesToKey failed");
 	}
 }
 
-void Crypt::EncryptAes(const std::vector<unsigned char> plainText, std::vector<unsigned char>& chipherText)
+void Crypt::EncryptAes(const std::vector<unsigned char>& plainText, std::vector<unsigned char>& chipherText)
 {
 	EVP_CIPHER_CTX* ctx = EVP_CIPHER_CTX_new();
 	if (!EVP_EncryptInit_ex(ctx, EVP_aes_128_cbc(), NULL, m_key, m_iv))
@@ -52,12 +52,12 @@ void Crypt::EncryptAes(const std::vector<unsigned char> plainText, std::vector<u
 	EVP_CIPHER_CTX_free(ctx);
 }
 
-bool Crypt::DecryptAes(const std::vector<unsigned char> plainText, std::vector<unsigned char>& chipherText)
+bool Crypt::DecryptAes(const std::vector<unsigned char>& plainText, std::vector<unsigned char>& chipherText)
 {
 	EVP_CIPHER_CTX* ctx = EVP_CIPHER_CTX_new();
 	if (!EVP_DecryptInit_ex(ctx, EVP_aes_128_cbc(), NULL, m_key, m_iv))
 	{
-		//throw std::runtime_error("DecryptInit error");
+		throw std::runtime_error("DecryptInit error");
 	}
 
 	std::vector<unsigned char> chipherTextBuf(plainText.size() + AES_BLOCK_SIZE);
@@ -65,7 +65,7 @@ bool Crypt::DecryptAes(const std::vector<unsigned char> plainText, std::vector<u
 	if (!EVP_DecryptUpdate(ctx, &chipherTextBuf[0], &chipherTextSize, &plainText[0], plainText.size()))
 	{
 		EVP_CIPHER_CTX_free(ctx);
-		//throw std::runtime_error("Decrypt error");
+		throw std::runtime_error("Decrypt error");
 	}
 
 	int lastPartLen = 0;
@@ -73,7 +73,6 @@ bool Crypt::DecryptAes(const std::vector<unsigned char> plainText, std::vector<u
 	{
 		EVP_CIPHER_CTX_free(ctx);
 		return false;
-		//throw std::runtime_error("DecryptFinal error");
 	}
 
 	chipherTextSize += lastPartLen;
@@ -104,7 +103,7 @@ void Crypt::CatTextAndHash(std::vector<unsigned char>& data, std::vector<unsigne
 
 	if (sizeData < SHA256_DIGEST_LENGTH)
 	{
-		//throw std::runtime_error("Corrupted file data");
+		throw std::runtime_error("Corrupted file data");
 	}
 
 	int is = sizeData - SHA256_DIGEST_LENGTH;

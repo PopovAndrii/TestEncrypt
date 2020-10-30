@@ -21,7 +21,7 @@ public:
 	bool PasswdLoop(std::vector<std::string> passwd);
 
 	bool PasswdGenerate(const std::vector<char> Chars);
-	void PasswdToFile();
+	bool PasswdToFile();
 
 	void InitParam(const int count, const int size, bool log);
 	void Stat();

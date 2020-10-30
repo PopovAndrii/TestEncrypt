@@ -13,8 +13,8 @@ public:
 	Crypt();
 
 	void PasswordToKey(std::string& password);
-	void EncryptAes(const std::vector<unsigned char> plainText, std::vector<unsigned char>& chipherText);
-	bool DecryptAes(const std::vector<unsigned char> plainText, std::vector<unsigned char>& chipherText);
+	void EncryptAes(const std::vector<unsigned char>& plainText, std::vector<unsigned char>& chipherText);
+	bool DecryptAes(const std::vector<unsigned char>& plainText, std::vector<unsigned char>& chipherText);
 	void CalculateHash(const std::vector<unsigned char>& data, std::vector<unsigned char>& hash);
 	void CatTextAndHash(std::vector<unsigned char>& data, std::vector<unsigned char>& hash);
 

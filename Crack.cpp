@@ -10,7 +10,8 @@ Crack::Crack()
 
 Crack::~Crack()
 {
-	delete m_file, m_crypt;
+	delete m_file; 
+	delete m_crypt;
 }
 
 void Crack::BufFileData()
@@ -125,7 +126,7 @@ bool Crack::PasswdGenerate(const std::vector<char> Chars)
 		for (int j = 0; j < N; ++j)
 		{
 			int K = 1;
-			std::string crack = "";
+			std::string crack;
 			for (int k = 0; k < i; ++k)
 			{
 				crack += Chars[j / K % n];
@@ -147,9 +148,9 @@ bool Crack::PasswdGenerate(const std::vector<char> Chars)
 	return true;
 }
 
-void Crack::PasswdToFile()
+bool Crack::PasswdToFile()
 {
-	m_file->WriteFileString("./text/log_passwd.txt", m_verifiPasswd);
+	return m_file->WriteFileString("./text/log_passwd.txt", m_verifiPasswd);
 }
 
 void Crack::InitParam(int count, int size, bool log)
@@ -162,9 +163,14 @@ void Crack::InitParam(int count, int size, bool log)
 void Crack::Stat()
 {
 	std::cout << "\nDecrypted password: " << m_findingPasswd << std::endl;
+
 	if (m_log)
 	{
 		std::cout << "Verified passwords: " << m_verifiPasswd.size() << std::endl;
-		PasswdToFile();
+		
+		if (PasswdToFile())
+		{
+			std::cout << "Log created" << std::endl;
+		}
 	}
 }
