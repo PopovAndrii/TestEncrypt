@@ -1,202 +1,274 @@
-// TestEncrypt.cpp : This file contains the 'main' function. Program execution begins and ends there.
-//
-#include <iostream>
-#include <Windows.h>
-#include <openssl/evp.h>
-#include <openssl/aes.h>
-#include <openssl/err.h>
 #include <string>
-#include <cstdio>
 #include <vector>
+#include <fstream>
+#include <exception>
+#include <iostream>
+#include <future>
+		
+#include "openssl/evp.h"
+#include "openssl/aes.h"
+#include "openssl/sha.h"
 
-//#include "FileCopy.h"
+#include "File.h"
 
-void handleErrors(void)
+unsigned char key[EVP_MAX_KEY_LENGTH];
+unsigned char iv[EVP_MAX_IV_LENGTH];
+
+void PasswordToKey(std::string& password)
 {
-    unsigned long errCode;
+	const EVP_MD* dgst = EVP_get_digestbyname("md5");
+	if (!dgst)
+	{
+		throw std::runtime_error("no such digest");
+	}
 
-    printf("An error occurred\n");
-    while (errCode = ERR_get_error())
-    {
-        char* err = ERR_error_string(errCode, NULL);
-        printf("%s\n", err);
-    }
-    abort();
-}
-int encrypt(unsigned char* plaintext, int plaintext_len, unsigned char* aad,
-    int aad_len, unsigned char* key, unsigned char* iv,
-    unsigned char* ciphertext, unsigned char* tag)
-{
-    EVP_CIPHER_CTX* ctx = NULL;
-    int len = 0, ciphertext_len = 0;
-
-    /* Create and initialise the context */
-    if (!(ctx = EVP_CIPHER_CTX_new())) handleErrors();
-
-    /* Initialise the encryption operation. */
-    if (1 != EVP_EncryptInit_ex(ctx, EVP_aes_256_gcm(), NULL, NULL, NULL))
-        handleErrors();
-
-    /* Set IV length if default 12 bytes (96 bits) is not appropriate */
-    if (1 != EVP_CIPHER_CTX_ctrl(ctx, EVP_CTRL_GCM_SET_IVLEN, 16, NULL))
-        handleErrors();
-
-    /* Initialise key and IV */
-    if (1 != EVP_EncryptInit_ex(ctx, NULL, NULL, key, iv)) handleErrors();
-
-    /* Provide any AAD data. This can be called zero or more times as
-     * required
-     */
-    if (aad && aad_len > 0)
-    {
-        if (1 != EVP_EncryptUpdate(ctx, NULL, &len, aad, aad_len))
-            handleErrors();
-    }
-
-    /* Provide the message to be encrypted, and obtain the encrypted output.
-     * EVP_EncryptUpdate can be called multiple times if necessary
-     */
-    if (plaintext)
-    {
-        if (1 != EVP_EncryptUpdate(ctx, ciphertext, &len, plaintext, plaintext_len))
-            handleErrors();
-
-        ciphertext_len = len;
-    }
-
-    /* Finalise the encryption. Normally ciphertext bytes may be written at
-     * this stage, but this does not occur in GCM mode
-     */
-    if (1 != EVP_EncryptFinal_ex(ctx, ciphertext + len, &len)) handleErrors();
-    ciphertext_len += len;
-
-    /* Get the tag */
-    if (1 != EVP_CIPHER_CTX_ctrl(ctx, EVP_CTRL_GCM_GET_TAG, 16, tag))
-        handleErrors();
-
-    /* Clean up */
-    EVP_CIPHER_CTX_free(ctx);
-
-    return ciphertext_len;
+	const unsigned char* salt = NULL;
+	if (!EVP_BytesToKey(EVP_aes_128_cbc(), EVP_md5(), salt,
+		reinterpret_cast<unsigned char*>(&password[0]),
+		password.size(), 1, key, iv))
+	{
+		throw std::runtime_error("EVP_BytesToKey failed");
+	}
 }
 
-int decrypt(unsigned char* ciphertext, int ciphertext_len, unsigned char* aad,
-    int aad_len, unsigned char* tag, unsigned char* key, unsigned char* iv,
-    unsigned char* plaintext)
+void EncryptAes(const std::vector<unsigned char> plainText, std::vector<unsigned char>& chipherText)
 {
-    EVP_CIPHER_CTX* ctx = NULL;
-    int len = 0, plaintext_len = 0, ret;
+	EVP_CIPHER_CTX* ctx = EVP_CIPHER_CTX_new();
+	if (!EVP_EncryptInit_ex(ctx, EVP_aes_128_cbc(), NULL, key, iv))
+	{
+		throw std::runtime_error("EncryptInit error");
+	}
 
-    /* Create and initialise the context */
-    if (!(ctx = EVP_CIPHER_CTX_new())) handleErrors();
+	std::vector<unsigned char> chipherTextBuf(plainText.size() + AES_BLOCK_SIZE);
+	int chipherTextSize = 0;
+	if (!EVP_EncryptUpdate(ctx, &chipherTextBuf[0], &chipherTextSize, &plainText[0], plainText.size()))
+	{
+		EVP_CIPHER_CTX_free(ctx);
+		throw std::runtime_error("Encrypt error");
+	}
 
-    /* Initialise the decryption operation. */
-    if (!EVP_DecryptInit_ex(ctx, EVP_aes_256_gcm(), NULL, NULL, NULL))
-        handleErrors();
+	int lastPartLen = 0;
+	if (!EVP_EncryptFinal_ex(ctx, &chipherTextBuf[0] + chipherTextSize, &lastPartLen))
+	{
+		EVP_CIPHER_CTX_free(ctx);
+		throw std::runtime_error("EncryptFinal error");
+	}
+	chipherTextSize += lastPartLen;
+	chipherTextBuf.erase(chipherTextBuf.begin() + chipherTextSize, chipherTextBuf.end());
 
-    /* Set IV length. Not necessary if this is 12 bytes (96 bits) */
-    if (!EVP_CIPHER_CTX_ctrl(ctx, EVP_CTRL_GCM_SET_IVLEN, 16, NULL))
-        handleErrors();
+	chipherText.swap(chipherTextBuf);
 
-    /* Initialise key and IV */
-    if (!EVP_DecryptInit_ex(ctx, NULL, NULL, key, iv)) handleErrors();
+	EVP_CIPHER_CTX_free(ctx);
+}
 
-    /* Provide any AAD data. This can be called zero or more times as
-     * required
-     */
-    if (aad && aad_len > 0)
-    {
-        if (!EVP_DecryptUpdate(ctx, NULL, &len, aad, aad_len))
-            handleErrors();
-    }
+bool DecryptAes(const std::vector<unsigned char> plainText, std::vector<unsigned char>& chipherText)
+{
+	EVP_CIPHER_CTX* ctx = EVP_CIPHER_CTX_new();
+	if (!EVP_DecryptInit_ex(ctx, EVP_aes_128_cbc(), NULL, key, iv))
+	{
+		throw std::runtime_error("DecryptInit error");
+	}
 
-    /* Provide the message to be decrypted, and obtain the plaintext output.
-     * EVP_DecryptUpdate can be called multiple times if necessary
-     */
-    if (ciphertext)
-    {
-        if (!EVP_DecryptUpdate(ctx, plaintext, &len, ciphertext, ciphertext_len))
-            handleErrors();
+	std::vector<unsigned char> chipherTextBuf(plainText.size() + AES_BLOCK_SIZE);
+	int chipherTextSize = 0;
+	if (!EVP_DecryptUpdate(ctx, &chipherTextBuf[0], &chipherTextSize, &plainText[0], plainText.size()))
+	{
+		EVP_CIPHER_CTX_free(ctx);
+		throw std::runtime_error("Decrypt error");
+	}
 
-        plaintext_len = len;
-    }
+	int lastPartLen = 0;
+	if (!EVP_DecryptFinal_ex(ctx, &chipherTextBuf[0] + chipherTextSize, &lastPartLen))
+	{
+		EVP_CIPHER_CTX_free(ctx);
+		return false;
+	}
 
-    /* Set expected tag value. Works in OpenSSL 1.0.1d and later */
-    if (!EVP_CIPHER_CTX_ctrl(ctx, EVP_CTRL_GCM_SET_TAG, 16, tag))
-        handleErrors();
+	chipherTextSize += lastPartLen;
+	chipherTextBuf.erase(chipherTextBuf.begin() + chipherTextSize, chipherTextBuf.end());
 
-    /* Finalise the decryption. A positive return value indicates success,
-     * anything else is a failure - the plaintext is not trustworthy.
-     */
-    ret = EVP_DecryptFinal_ex(ctx, plaintext + len, &len);
+	chipherText.swap(chipherTextBuf);
 
-    /* Clean up */
-    EVP_CIPHER_CTX_free(ctx);
+	EVP_CIPHER_CTX_free(ctx);
 
-    if (ret > 0)
-    {
-        /* Success */
-        plaintext_len += len;
-        return plaintext_len;
-    }
-    else
-    {
-        /* Verify failed */
-        return -1;
-    }
+	return true;
+}
+
+void CalculateHash(const std::vector<unsigned char>& data, std::vector<unsigned char>& hash)
+{
+	std::vector<unsigned char> hashTmp(SHA256_DIGEST_LENGTH);
+
+	SHA256_CTX sha256;
+	SHA256_Init(&sha256);
+	SHA256_Update(&sha256, &data[0], data.size());
+	SHA256_Final(&hashTmp[0], &sha256);
+
+	hash.swap(hashTmp);
+}
+
+// Divide the text and checksum
+void CatTextAndHash(std::vector<unsigned char>& data, std::vector<unsigned char>& hash)
+{
+	int sizeData = size(data);
+
+	if (sizeData < SHA256_DIGEST_LENGTH)
+	{
+		throw std::runtime_error("Corrupted file data");
+	}
+
+	int is = sizeData - SHA256_DIGEST_LENGTH;
+	for (int i = 0; is != sizeData; ++is, ++i)
+	{
+		hash.push_back(data[is]);
+	}
+
+	data.resize(sizeData - SHA256_DIGEST_LENGTH);
+}
+
+// If you do not use this function, the calculation takes a long time.
+void BufFileData(std::vector<unsigned char>& chipherText, std::vector<unsigned char>& hash1)
+{
+	std::unique_ptr<File> file(new File);
+
+	file->ReadFile("./text/chipher_text_brute_force", chipherText);
+
+	CatTextAndHash(chipherText, hash1);
+}
+
+bool Decrypt(std::vector<unsigned char>& chipherText, std::vector<unsigned char>& hash1)
+{
+	std::unique_ptr<File> file(new File);
+
+	std::vector<unsigned char> plainText;
+	if (!DecryptAes(chipherText, plainText))
+	{
+		return false;
+	}
+
+	std::vector<unsigned char> hash2;
+	CalculateHash(plainText, hash2);
+
+	if (hash1 == hash2)
+	{
+		std::cout << "\n Check summ is correct. Write..." << std::endl;
+		file->WriteFile("./text/final_text", plainText);
+	}
+	else
+	{
+		return false;
+	}
+
+	return true;
+}
+
+void Encrypt()
+{
+	std::unique_ptr<File> file(new File);
+
+	std::vector<unsigned char> plainText;
+	file->ReadFile("./text/plain_text", plainText);
+
+	std::vector<unsigned char> hash;
+	CalculateHash(plainText, hash);
+
+	std::vector<unsigned char> chipherText;
+	EncryptAes(plainText, chipherText);
+
+	file->WriteFile("./text/chipher_text", chipherText);
+
+	file->AppendToFile("./text/chipher_text", hash);
+}
+
+std::string PasswdLoop(std::vector<std::string> passwd, std::vector<unsigned char>& chipherText, std::vector<unsigned char>& hash)
+{
+	for (auto it = passwd.begin(); it != passwd.end(); ++it)
+	{
+		PasswordToKey(*it);
+
+		if (Decrypt(chipherText, hash))
+		{
+			return *it;
+		}
+	}
+	return std::string();
+}
+
+bool Crack(std::vector<char> Chars, int numberTreads, int vectorSize)
+{
+	std::vector<unsigned char> chipherText;
+	std::vector<unsigned char> hash1;
+	BufFileData(chipherText, hash1);
+
+	std::vector<std::future <std::string>> tread;
+	std::vector<std::string> pass;
+
+	int n = Chars.size();
+	int i = 0;
+
+	while (true)
+	{
+		++i;
+		int N = 1;
+		for (int j = 0; j < i; ++j)
+		{
+			N *= n;
+		}
+		for (int j = 0; j < N; ++j)
+		{
+			int K = 1;
+			std::string crack;
+			for (int k = 0; k < i; ++k)
+			{
+				crack += Chars[j / K % n];
+				K *= n;
+			}
+
+			pass.push_back(crack);
+
+			if (pass.size() == vectorSize)
+			{
+				tread.emplace_back(std::async(PasswdLoop, pass, std::ref(chipherText), std::ref(hash1)));
+
+				if (tread.size() == numberTreads)
+				{
+					for (int t = 0; t != numberTreads; ++t)
+					{
+						std::string findingPasswd = tread[t].get();
+						if (!findingPasswd.empty())
+						{
+							std::cout << findingPasswd << std::endl;
+							return true;
+						}
+					}
+					std::cout << ".";
+					tread.clear();
+				}
+				pass.clear();
+			}
+		}
+	}
+	return true;
 }
 
 int main()
 {
+	OpenSSL_add_all_digests();
 
-    unsigned char key[] = "01234567890123456789012345678901";
+	try
+	{
+		// !!!Warning!!! Rewrite plane_text new password
+		//PasswordToKey(pass);
+		//Encrypt();
 
-    /* A 128 bit IV */
-    unsigned char iv[] = "0123456789012345";
+		std::vector<char> Dictionary = { '0','1','2','3','4','5','6','7','8','9','a','b','c','d','e','f','g','h','i','j','k','l','m','n','o','p','q','r','s','t','u','v','w','x','y','z', };
 
-    /* Message to be encrypted */
-    unsigned char plaintext[] = "The quick brown fox jumps over the lazy dog";
+		Crack(Dictionary, 16, 5000);
 
-    /* Some additional data to be authenticated */
-    unsigned char aad[] = "Some AAD data";
+	}
+	catch (const std::runtime_error& ex)
+	{
+		std::cerr << ex.what();
+	}
 
-    /* Buffer for ciphertext. Ensure the buffer is long enough for the
-     * ciphertext which may be longer than the plaintext, dependant on the
-     * algorithm and mode
-     */
-    unsigned char ciphertext[128];
 
-    /* Buffer for the decrypted text */
-    unsigned char decryptedtext[128];
-
-    /* Buffer for the tag */
-    unsigned char tag[16];
-
-    int decryptedtext_len = 0, ciphertext_len = 0;
-
-    /* Encrypt the plaintext */
-    ciphertext_len = encrypt(plaintext, sizeof(plaintext), aad, sizeof(aad), key, iv, ciphertext, tag);
-
-    /* Decrypt the ciphertext */
-    decryptedtext_len = decrypt(ciphertext, ciphertext_len, aad, sizeof(aad), tag, key, iv, decryptedtext);
-
-    if (decryptedtext_len < 0)
-    {
-        /* Verify error */
-        printf("Decrypted text failed to verify\n");
-    }
-    else
-    {
-        /* Add a NULL terminator. We are expecting printable text */
-        decryptedtext[decryptedtext_len] = '\0';
-
-        /* Show the decrypted text */
-        printf("Decrypted text is:\n");
-        printf("%s\n", decryptedtext);
-    }
-
-    /* Remove error strings */
-    ERR_free_strings();
-    
-    return 0;
 }
