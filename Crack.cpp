@@ -1,10 +1,9 @@
 #include "Crack.h"
 
-Crack::Crack()
+Crack::Crack() :
+	m_file(new File),
+	m_crypt(new Crypt)
 {
-	m_file = new File;
-	m_crypt = new Crypt;
-
 	BufFileData();
 }
 
@@ -60,9 +59,7 @@ void Crack::Encrypt()
 	m_file->AppendToFile("./text/chipher_text1", hash);
 }
 
-bool Crack::PasswdLoop(
-	std::vector<std::string> passwd
-)
+bool Crack::PasswdLoop(std::vector<std::string> passwd)
 {
 	for (auto it = passwd.begin(); it != passwd.end(); ++it)
 	{
