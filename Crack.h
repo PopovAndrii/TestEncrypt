@@ -15,6 +15,9 @@ public:
 	Crack();
 	~Crack();
 
+	Crack(const Crack& obj) = delete;
+	Crack& operator=(Crack& obj) = delete;
+
 	void Encrypt();
 	
 	bool ThreadManager();
@@ -31,8 +34,8 @@ private:
 	void BufFileData();
 	bool Decrypt();
 
-	File* m_file;
-	Crypt* m_crypt;
+	File* m_file = nullptr;
+	Crypt* m_crypt = nullptr;
 
 	std::vector<unsigned char> m_chipherText;
 	std::vector<unsigned char> m_hash;

@@ -9,8 +9,15 @@ Crack::Crack() :
 
 Crack::~Crack()
 {
-	delete m_file; 
-	delete m_crypt;
+	if (m_file)
+	{
+		delete m_file;
+	}
+
+	if (m_crypt)
+	{
+		delete m_crypt;
+	}
 }
 
 void Crack::BufFileData()
@@ -164,7 +171,7 @@ void Crack::Stat()
 	if (m_log)
 	{
 		std::cout << "Verified passwords: " << m_verifiPasswd.size() << std::endl;
-		
+
 		if (PasswdToFile())
 		{
 			std::cout << "Log created" << std::endl;
