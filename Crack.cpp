@@ -97,7 +97,7 @@ bool Crack::PasswdLoop(std::vector<std::string> passwd)
 
 bool Crack::ThreadManager()
 {
-	m_thread.emplace_back(std::async(&Crack::PasswdLoop, this, m_passwd));
+	m_thread.emplace_back(std::async(&Crack::PasswdLoop, this, std::move(m_passwd)));
 
 	if (m_thread.size() == m_threadCount)
 	{
@@ -112,8 +112,6 @@ bool Crack::ThreadManager()
 		}
 		m_thread.clear();
 	}
-	m_passwd.clear();
-
 	return false;
 }
 
