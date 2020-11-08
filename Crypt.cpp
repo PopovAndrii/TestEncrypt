@@ -110,7 +110,7 @@ void Crypt::CatTextAndHash(std::vector<unsigned char>& data, std::vector<unsigne
 
 	for (int i = 0; is != sizeData; ++is, ++i)
 	{
-		hash.push_back(data[is]);
+		hash.push_back(std::move(data[is]));
 	}
 
 	data.resize(sizeData - SHA256_DIGEST_LENGTH);

@@ -135,7 +135,7 @@ bool Crack::PasswdGenerate(const std::vector<char> Chars)
 				K *= n;
 			}
 
-			m_passwd.push_back(crack);
+			m_passwd.push_back(std::move(crack));
 
 			if (m_passwd.size() == m_passwdVectorSize)
 			{
