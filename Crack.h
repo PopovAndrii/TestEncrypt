@@ -2,7 +2,6 @@
 
 #include <vector>
 #include <future>
-//#include <atomic>
 #include <mutex>
 
 #include "File.h"
