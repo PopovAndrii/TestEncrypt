@@ -22,9 +22,9 @@ public:
 	
 	bool ThreadManager();
 	bool PasswdLoop(std::vector<std::string> passwd);
+	bool WritePasswdLoop();
 
 	bool PasswdGenerate(const std::vector<char> Chars);
-	bool PasswdToFile();
 
 	void InitParam(const int count, const int size, bool log);
 	void Stat();
@@ -51,6 +51,7 @@ private:
 	std::vector<std::string> m_passwd;
 
 	std::vector<std::string> m_verifiPasswd;
+	int m_verifiPasswdSize = 0;
 	std::string m_findingPasswd;
 
 };

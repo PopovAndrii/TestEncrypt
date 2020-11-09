@@ -33,9 +33,9 @@ void File::AppendToFile(const fs::path& filePath, const std::vector<unsigned cha
     fileStream.close();
 }
 
-bool File::WriteFileString(const fs::path& filePath, const std::vector<std::string>& buf)
+bool File::WriteFileString(const std::vector<std::string>& buf)
 {
-    std::ofstream fileStream(filePath);
+    std::ofstream fileStream(m_path, std::ios_base::app);
     if (!fileStream.is_open())
     {
         return false;
@@ -49,4 +49,22 @@ bool File::WriteFileString(const fs::path& filePath, const std::vector<std::stri
     fileStream.close();
 
     return true;
+}
+
+bool File::TruncFile()
+{
+    std::ofstream fileStream(m_path, std::ios_base::trunc);
+    if (!fileStream.is_open())
+    {
+        return false;
+    }
+
+    fileStream.close();
+
+    return true;
+}
+
+void File::SetPath(const fs::path& filePath)
+{
+    m_path = filePath;
 }

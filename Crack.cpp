@@ -86,12 +86,22 @@ bool Crack::PasswdLoop(std::vector<std::string> passwd)
 		}
 
 		if (m_log) {
-			{
-				std::scoped_lock ul(m_lock);
-				m_verifiPasswd.push_back(*it);
-			}
+			std::scoped_lock ul{ m_lock };
+			m_verifiPasswd.push_back(*it);
+			++m_verifiPasswdSize;
 		}
 	}
+	return false;
+}
+
+bool Crack::WritePasswdLoop()
+{
+	if (m_log) {
+		std::scoped_lock ul{ m_lock };
+		std::vector<std::string> passwd{ std::move(m_verifiPasswd) };
+		m_file->WriteFileString(passwd);
+	}
+
 	return false;
 }
 
@@ -101,6 +111,8 @@ bool Crack::ThreadManager()
 
 	if (m_thread.size() == m_threadCount)
 	{
+		std::async(&Crack::WritePasswdLoop, this);
+
 		std::cout << ".";
 
 		for (int t = 0; t != m_threadCount; ++t)
@@ -150,16 +162,14 @@ bool Crack::PasswdGenerate(const std::vector<char> Chars)
 	return true;
 }
 
-bool Crack::PasswdToFile()
-{
-	return m_file->WriteFileString("./text/log_passwd.txt", m_verifiPasswd);
-}
-
 void Crack::InitParam(int count, int size, bool log)
 {
 	m_threadCount = count;
 	m_passwdVectorSize = size;
 	m_log = log;
+
+	m_file->SetPath("./text/log_passwd.txt");
+	m_file->TruncFile();
 }
 
 void Crack::Stat()
@@ -168,11 +178,8 @@ void Crack::Stat()
 
 	if (m_log)
 	{
-		std::cout << "Verified passwords: " << m_verifiPasswd.size() << std::endl;
+		std::cout << "Verified passwords: " << m_verifiPasswdSize << std::endl;
+		std::cout << "Log created" << std::endl;
 
-		if (PasswdToFile())
-		{
-			std::cout << "Log created" << std::endl;
-		}
 	}
 }
